@@ -147,7 +147,7 @@ def read_kafka_stream(spark: SparkSession):
 # ──────────────────────────────────────────────
 # 5. JSON 파싱 및 이벤트 타임 변환
 # ──────────────────────────────────────────────
-def parse_trades(raw_stream, schema: StructType):
+def parse_trades(raw_stream):
     """
     Kafka value(binary) → 우리가 원하는 컬럼들로 변환하는 과정.
 
@@ -309,7 +309,7 @@ def main():
     try:
         # 파이프라인 구성 (실제 실행은 writeStream.start()에서 시작)
         raw_stream = read_kafka_stream(spark)
-        parsed = parse_trades(raw_stream, get_trade_schema())
+        parsed = parse_trades(raw_stream)
         ohlcv = compute_ohlcv(parsed)
         query = start_console_sink(ohlcv)
 
