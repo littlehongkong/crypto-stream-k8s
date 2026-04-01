@@ -1,4 +1,14 @@
+# docker-compose.yml
+
 version: '3.8'
+
+networks:
+  crypto-network:
+    driver: bridge
+
+volumes:
+  checkpoint_data:
+  kafka_data:
 
 services:
   zookeeper:
@@ -7,7 +17,6 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-      # M1 메모리 최적화: 힙 사이즈 제한
       KAFKA_OPTS: "-Xms256M -Xmx256M"
     ports:
       - "2181:2181"
@@ -29,7 +38,6 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      # M1 메모리 최적화: 힙 사이즈 제한 (12년차의 디테일: 512MB면 충분합니다)
       KAFKA_HEAP_OPTS: "-Xms512M -Xmx512M"
     networks:
       - crypto-network
@@ -49,18 +57,34 @@ services:
       - crypto-network
 
   producer:
-      build:
-        context: ./producer
-        dockerfile: Dockerfile
-      container_name: binance-producer
-      depends_on:
-        - kafka
-      restart: unless-stopped
-      networks:
-        - crypto-network
-      environment:
-        - PYTHONUNBUFFERED=1
+    build:
+      context: ./producer
+      dockerfile: Dockerfile
+    platform: linux/arm64
+    container_name: producer
+    networks:
+      - crypto-network
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SYMBOLS: btcusdt,ethusdt
+    restart: on-failure
 
-networks:
-  crypto-network:
-    driver: bridge
+  spark-ohlcv:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    platform: linux/arm64
+    container_name: spark-ohlcv
+    networks:
+      - crypto-network
+    depends_on:
+      - kafka
+    volumes:
+      - checkpoint_data:/tmp/spark-checkpoint
+      - ./spark:/app
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: crypto-trades
+      CHECKPOINT_DIR: /tmp/spark-checkpoint
