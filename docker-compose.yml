@@ -38,6 +38,8 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"  # 👈 추가: 자동 생성 방지
+      KAFKA_NUM_PARTITIONS: 3                   # 👈 추가: 기본 파티션 개수 지정
       KAFKA_HEAP_OPTS: "-Xms512M -Xmx512M"
     networks:
       - crypto-network
@@ -65,9 +67,14 @@ services:
     networks:
       - crypto-network
     depends_on:
-      - kafka
+      kafka:
+        condition: service_started
+      init-kafka:
+        condition: service_started
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: crypto-trades      # 토픽명 명시
+      KAFKA_PARTITIONS: 3             # 파티션 개수 정보 전달
       SYMBOLS: btcusdt,ethusdt
     restart: on-failure
 
@@ -81,13 +88,23 @@ services:
       - crypto-network
     depends_on:
       - kafka
+      - minio  # MinIO가 뜬 후 실행되도록 추가
     volumes:
       - checkpoint_data:/tmp/spark-checkpoint
       - ./spark:/app
+    # --- 아래 부분을 수정/추가하세요 ---
+    command: >
+      spark-submit 
+      --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262
+      /app/ohlcv_streaming_minio.py
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_TOPIC: crypto-trades
       CHECKPOINT_DIR: /tmp/spark-checkpoint
+      # MinIO 접속 정보 (코드 내부에서 환경변수를 읽도록 설계된 경우)
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: admin
+      MINIO_SECRET_KEY: password123
 
 
   minio:
@@ -117,3 +134,60 @@ services:
       "
     networks:
       - crypto-network
+
+# 기존 postgres 서비스 이름을 수정하여 중복 방지
+  crypto-postgres:
+    image: postgres:15
+    container_name: crypto-postgres # 이름 변경
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: crypto_db
+    ports:
+      - "5433:5432" # 로컬 포트를 5433으로 변경 (기존 5432와 충돌 방지)
+    networks:
+      - crypto-network
+
+  # Airflow 서비스 설정
+  crypto-airflow:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: crypto-airflow
+    depends_on:
+      - crypto-postgres
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:password123@crypto-postgres/crypto_db
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__SECRET_KEY='crypto-secret'
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+    ports:
+      - "8081:8080"
+    command: standalone # 다시 원래대로 복구
+    networks:
+      - crypto-network
+
+  init-kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: init-kafka  # 👈 이름 추가하면 관리하기 편해요
+    networks:
+      - crypto-network
+    depends_on:
+      - kafka
+    entrypoint: [ "/bin/sh", "-c" ]
+    command: |
+      "
+      echo 'Waiting for Kafka...'
+      cub kafka-ready -b kafka:29092 1 60
+      
+      # 1개라도 없으면 3개로 생성 시도
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic crypto-trades --partitions 3 --replication-factor 1
+      
+      # 혹시 1개로 이미 만들어졌다면 3개로 강제 확장
+      kafka-topics --alter --bootstrap-server kafka:29092 --topic crypto-trades --partitions 3 || true
+      
+      echo 'Kafka setup finish!'
+      "

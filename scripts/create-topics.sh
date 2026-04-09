@@ -16,6 +16,14 @@ docker exec $CONTAINER kafka-topics --create \
   --replication-factor 1 \
   --if-not-exists  # 이미 있으면 에러 없이 스킵
 
+
+docker exec kafka kafka-topics --describe \
+  --bootstrap-server localhost:9092 \
+  --topic crypto-trades
+  --partitions 3 \
+  --replication-factor 1 \
+  --if-not-exists  # 이미 있으면 에러 없이 스킵
+
 echo "생성된 토픽 목록:"
 docker exec $CONTAINER kafka-topics --list \
   --bootstrap-server $BROKER

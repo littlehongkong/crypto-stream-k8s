@@ -1,0 +1,5 @@
+FROM apache/airflow:2.8.1-python3.11
+
+# 필요한 라이브러리 설치
+# (airflow 유저 권한으로 실행되므로 보안 경고가 사라집니다)
+RUN pip install --no-cache-dir s3fs boto3 psycopg2-binary
