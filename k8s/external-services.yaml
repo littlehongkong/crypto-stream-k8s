@@ -1,0 +1,16 @@
+# k8s/external-services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio       # Spark가 찾는 그 이름!
+spec:
+  type: ExternalName
+  externalName: host.docker.internal # Docker Desktop 환경에서 내 맥북을 가리키는 고유 이름
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka       # Kafka도 미리 등록해둡시다
+spec:
+  type: ExternalName
+  externalName: host.docker.internal

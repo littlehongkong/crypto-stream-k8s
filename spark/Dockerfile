@@ -45,7 +45,7 @@ RUN ${SPARK_HOME}/bin/spark-shell \
     --conf spark.jars.ivy=/opt/ivy \
     -e "System.exit(0)" 2>/dev/null || true
 
-COPY requirements.txt /app/requirements.txt
+COPY spark/requirements.txt /app/requirements.txt
 RUN pip3 install --no-cache-dir -r /app/requirements.txt
 
 WORKDIR /app
