@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crypto-producer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: producer
+  template:
+    metadata:
+      labels:
+        app: producer
+    spec:
+      containers:
+      - name: producer
+        image: crypto-producer:latest
+        imagePullPolicy: Never # 중요: 외부에서 pull하지 않고 로컬 이미지 사용
+        envFrom:
+        - configMapRef:
+            name: crypto-config
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"

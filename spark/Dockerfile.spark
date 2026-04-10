@@ -1,0 +1,26 @@
+# 1. Spark 공식 이미지 사용 (이미 Java, Spark, Python이 설치됨)
+FROM apache/spark:3.5.0
+
+USER root
+
+# 필수 라이브러리만 최소 설치 (Python은 이미 있으므로 pip만 보강)
+# 미러 서버 지연을 피하기 위해 불필요한 패키지 최소화
+RUN apt-get update && apt-get install -y \
+    curl \
+    python3-pip \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 2. 의존성 파일 복사 (마지막에 마침표 . 로 빌드한다고 가정)
+COPY spark/requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# 3. 소스 코드 및 관련 파일 복사
+# 전체를 다 복사하기보다 필요한 파일만 복사하는 것이 빌드 캐시 효율이 좋습니다.
+COPY spark/ohlcv_streaming_minio.py .
+
+# 4. K8s 환경에서 실행될 때는 spark-submit이 직접 사용되거나
+# 아래와 같이 python으로 직접 실행 가능합니다.
+CMD ["python3", "ohlcv_streaming_minio.py"]

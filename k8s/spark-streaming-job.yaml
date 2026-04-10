@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-ohlcv
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-ohlcv
+  template:
+    metadata:
+      labels:
+        app: spark-ohlcv
+    spec:
+      containers:
+      - name: spark
+        image: crypto-spark:latest
+        imagePullPolicy: Never
+        command: ["/opt/spark/bin/spark-submit"]
+        args: [
+          "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262",
+          "ohlcv_streaming_minio.py"
+        ]
+        envFrom:
+        - configMapRef:
+            name: crypto-config
+        resources:
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
